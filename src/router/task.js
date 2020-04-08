@@ -2,10 +2,12 @@ const express = require('express')
 const router = new express.Router()
 const auth = require('../middleware/auth')
 const Task = require('../models/task')
+const multer = require('multer')
+const sharp = require('sharp')
 
 router.post('/tasks', auth, async (req, res) => {
     //const task = new Task(req.body)
-      
+
     const task = new Task({
         ...req.body,
         owner: req.user._id
@@ -32,7 +34,7 @@ router.get('/tasks', auth, async (req, res) => {
         match.completed = req.query.completed === 'true'
     }
 
-    if(req.query.sortBy) {
+    if (req.query.sortBy) {
         const parts = req.query.sortBy.split(':')
         sort[parts[0]] = parts[1] === 'desc' ? -1 : 1
     }
@@ -46,20 +48,20 @@ router.get('/tasks', auth, async (req, res) => {
                 skip: parseInt(req.query.skip),
                 sort
             }
-        }).execPopulate()   
+        }).execPopulate()
 
-        res.status(200).send(req.user.tasks) 
+        res.status(200).send(req.user.tasks)
     }
     catch (e) {
         res.status(500).send(e)
-    }      
+    }
 })
 
-router.get('/tasks/:id', auth, async (req,res) => {
+router.get('/tasks/:id', auth, async (req, res) => {
     const _id = req.params.id
     try {
         // const task = await Task.findById(_id)
-        const task = await Task.findOne({ _id, owner:req.user._id })
+        const task = await Task.findOne({ _id, owner: req.user._id })
         if (!task) {
             return res.status(404).send()
         }
@@ -83,8 +85,8 @@ router.patch('/tasks/:id', auth, async (req, res) => {
     }
 
     try {
-        const task = await Task.findOne({ _id: req.params.id, owner:req.user._id })
-        
+        const task = await Task.findOne({ _id: req.params.id, owner: req.user._id })
+
         if (!task) {
             return res.status(404).send()
         }
@@ -94,14 +96,14 @@ router.patch('/tasks/:id', auth, async (req, res) => {
 
         res.send(task)
     }
-    catch (e) {        
+    catch (e) {
         res.status(400).send(e)
     }
 })
 
 router.delete('/tasks/:id', auth, async (req, res) => {
     try {
-        const task = await Task.findOneAndDelete({ _id: req.params.id, owner: req.user._id})
+        const task = await Task.findOneAndDelete({ _id: req.params.id, owner: req.user._id })
 
         if (!task) {
             return res.status(404).send()
@@ -113,4 +115,49 @@ router.delete('/tasks/:id', auth, async (req, res) => {
     }
 })
 
+const upload = multer({
+    limits: {
+        files: 2,
+        fileSize: 1000000
+    },
+    fileFilter(req, file, cb) {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|bmp)$/)) {
+            cb(new Error('Please Upload an image file'))
+        }
+        cb(undefined, true)
+    }
+})
+
+router.post('/tasks/images/:id', auth, upload.array('uploads'), async (req, res) => {
+
+    try {
+        const task = await Task.findById(req.params.id)
+
+        if (!task) {
+            res.status(404).send()
+        }
+
+        await Promise.all(req.files.map(async (file) => {
+            const buffer = await sharp(file.buffer).resize({ height: 250, width: 250 }).png().toBuffer()
+            task.images = task.images.concat({ image: buffer })
+        }))
+
+        await task.save()
+        res.send()
+    }
+    catch (e) {
+        res.status(500).send()
+    }
+
+}, (error, req, res, next) => {
+    res.status(400).send({ error: error.message })
+})
+
+router.get('/tasks/:id/image', auth, async (req, res) => {
+
+    const task = await Task.findOne({ _id: req.params.id })
+
+    res.set('Content-Type', 'image/jpg')
+    res.send(task.images[0].image)
+})
 module.exports = router

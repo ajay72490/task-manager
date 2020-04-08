@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
     },
     age:{
         type: Number,
-        default: 0,
+        default: 0, 
         validate(value){
             if(value < 0){
                 throw new Error("Age must be a positive number")
@@ -60,7 +60,7 @@ userSchema.virtual('tasks', {
     foreignField: 'owner'
 })
 
-userSchema.methods.toJSON = function () {      // toJSON is called whenever a JSON.stringify is called 
+userSchema.methods.toJSON = function () {    // toJSON is called whenever a JSON.stringify is called 
     const user = this 
     const userObject = user.toObject()       
 
